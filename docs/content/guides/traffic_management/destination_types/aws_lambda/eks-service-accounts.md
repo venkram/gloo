@@ -157,4 +157,22 @@ Note: Unnecessary use of -X or --request, POST is already inferred.
 "ABC"* Closing connection 0
 ```
 
+We can also optionally override the role ARN used to authenticate our lambda requests, by adding it into our Upstream
+like so:
+```yaml
+apiVersion: gloo.solo.io/v1
+kind: Upstream
+metadata:
+  annotations:
+  name: lambda
+  namespace: gloo-system
+spec:
+  aws:
+    lambdaFunctions:
+    - lambdaFunctionName: uppercase
+      logicalName: uppercase1
+      qualifier: "1"
+    region: us-east-1
+    roleArn: $SECONDARY_AWS_ROLE_ARN
+```
 
