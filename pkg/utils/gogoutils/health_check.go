@@ -6,6 +6,7 @@ import (
 	"github.com/solo-io/gloo/pkg/utils/protoutils"
 	envoycluster_gloo "github.com/solo-io/gloo/projects/gloo/pkg/api/external/envoy/api/v2/cluster"
 	envoycore_gloo "github.com/solo-io/gloo/projects/gloo/pkg/api/external/envoy/api/v2/core"
+	v1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
 )
 
 // Converts between Envoy and Gloo/solokit versions of envoy protos
@@ -83,14 +84,14 @@ func ToEnvoyOutlierDetection(detection *envoycluster_gloo.OutlierDetection) *env
 	}
 }
 
-func ToEnvoyHealthCheckList(check []*envoycore_gloo.HealthCheck) ([]*envoycore.HealthCheck, error) {
+func ToEnvoyHealthCheckList(check []*envoycore_gloo.HealthCheck, secrets *v1.SecretList) ([]*envoycore.HealthCheck, error) {
 	if check == nil {
 		return nil, nil
 	}
 	result := make([]*envoycore.HealthCheck, len(check))
 	for i, v := range check {
 		var err error
-		result[i], err = ToEnvoyHealthCheck(v)
+		result[i], err = ToEnvoyHealthCheck(v, secrets)
 		if err != nil {
 			return nil, err
 		}
@@ -98,7 +99,7 @@ func ToEnvoyHealthCheckList(check []*envoycore_gloo.HealthCheck) ([]*envoycore.H
 	return result, nil
 }
 
-func ToEnvoyHealthCheck(check *envoycore_gloo.HealthCheck) (*envoycore.HealthCheck, error) {
+func ToEnvoyHealthCheck(check *envoycore_gloo.HealthCheck, secrets *v1.SecretList) (*envoycore.HealthCheck, error) {
 	if check == nil {
 		return nil, nil
 	}
@@ -133,7 +134,7 @@ func ToEnvoyHealthCheck(check *envoycore_gloo.HealthCheck) (*envoycore.HealthChe
 				Path:                   typed.HttpHealthCheck.GetPath(),
 				UseHttp2:               typed.HttpHealthCheck.GetUseHttp2(),
 				ServiceName:            typed.HttpHealthCheck.GetServiceName(),
-				RequestHeadersToAdd:    ToEnvoyHeaderValueOptionList(typed.HttpHealthCheck.GetRequestHeadersToAdd()),
+				RequestHeadersToAdd:    ToEnvoyHeaderValueOptionList(typed.HttpHealthCheck.GetRequestHeadersToAdd(), secrets),
 				RequestHeadersToRemove: typed.HttpHealthCheck.GetRequestHeadersToRemove(),
 				ExpectedStatuses:       ToEnvoyInt64RangeList(typed.HttpHealthCheck.GetExpectedStatuses()),
 			},

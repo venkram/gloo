@@ -149,6 +149,26 @@ metadata:
 		})
 	})
 
+	Context("Header", func() {
+		shouldWork := func(command, namespace string) {
+			err := testutils.Glooctl(command)
+			Expect(err).NotTo(HaveOccurred())
+
+			secret, err := helpers.MustSecretClient().Read(namespace, "test", clients.ReadOpts{})
+			Expect(err).NotTo(HaveOccurred())
+
+			header := v1.HeaderSecret{
+				Name: "foo",
+				Value: "bar",
+			}
+			Expect(*secret.GetHeader()).To(Equal(header))
+		}
+
+		It("should work", func() {
+			shouldWork("create secret header --name test --header-name foo --value bar", "gloo-system")
+		})
+	})
+
 	Context("TLS", func() {
 		It("should error if no name provided", func() {
 			err := testutils.Glooctl("create secret tls")
