@@ -116,6 +116,14 @@ type Settings struct {
 	Linkerd                       bool                 `json:"linkerd" desc:"Enable automatic Linkerd integration in Gloo."`
 	DisableProxyGarbageCollection bool                 `json:"disableProxyGarbageCollection" desc:"Set this option to determine the state of an Envoy listener when the corresponding Gloo Proxy resource has no routes. If false (default), Gloo will propagate the state of the Proxy to Envoy, resetting the listener to a clean slate with no routes. If true, Gloo will keep serving the routes from the last applied valid configuration."`
 	DisableKubernetesDestinations bool                 `json:"disableKubernetesDestinations" desc:"Gloo allows you to directly reference a Kubernetes service as a routing destination. To enable this feature, Gloo scans the cluster for Kubernetes services and creates a special type of in-memory Upstream to represent them. If the cluster contains a lot of services and you do not restrict the namespaces Gloo is watching, this can result in significant overhead. If you do not plan on using this feature, you can set this flag to true to turn it off."`
+	Aws                           AwsSettings          `json:"aws,omitempty"`
+	RateLimit                     interface{}          `json:"rateLimit" desc:"Partial config for GlooE’s rate-limiting service, based on Envoy’s rate-limit service; supports Envoy’s rate-limit service API. (reference here: https://github.com/lyft/ratelimit#configuration) Configure rate-limit descriptors here, which define the limits for requests based on their descriptors. Configure rate-limits (composed of actions, which define how request characteristics get translated into descriptors) on the VirtualHost or its routes."`
+}
+
+type AwsSettings struct {
+	EnableCredentialsDiscovery      bool   `json:"enableCredentialsDiscovery" desc:"Enable AWS credentials discovery in Envoy for lambda requests. If enableServiceAccountCredentials is also set, it will take precedence as only one may be enabled in Gloo "`
+	EnableServiceAccountCredentials bool   `json:"enableServiceAccountCredentials" desc:"Use ServiceAccount credentials to authenticate lambda requests. If enableCredentialsDiscovery is also set, this will take precedence as only one may be enabled in Gloo"`
+	StsCredentialsRegion            string `json:"stsCredentialsRegion" desc:"Regional endpoint to use for AWS STS requests. If empty will default to global sts endpoint."`
 }
 
 type InvalidConfigPolicy struct {
@@ -252,21 +260,29 @@ type DaemonSetSpec struct {
 }
 
 type GatewayProxyPodTemplate struct {
-	Image            *Image                `json:"image,omitempty"`
-	HttpPort         int                   `json:"httpPort,omitempty" desc:"HTTP port for the gateway service target port"`
-	HttpsPort        int                   `json:"httpsPort,omitempty" desc:"HTTPS port for the gateway service target port"`
-	ExtraPorts       []interface{}         `json:"extraPorts,omitempty" desc:"extra ports for the gateway pod"`
-	ExtraAnnotations map[string]string     `json:"extraAnnotations,omitempty" desc:"extra annotations to add to the pod"`
-	NodeName         string                `json:"nodeName,omitempty" desc:"name of node to run on"`
-	NodeSelector     map[string]string     `json:"nodeSelector,omitempty" desc:"label selector for nodes"`
-	Tolerations      []*appsv1.Toleration  `json:"tolerations,omitEmpty"`
-	Probes           bool                  `json:"probes" desc:"enable liveness and readiness probes"`
-	Resources        *ResourceRequirements `json:"resources,omitempty"`
-	DisableNetBind   bool                  `json:"disableNetBind" desc:"don't add the NET_BIND_SERVICE capability to the pod. This means that the gateway proxy will not be able to bind to ports below 1024"`
-	RunUnprivileged  bool                  `json:"runUnprivileged" desc:"run envoy as an unprivileged user"`
-	FloatingUserId   bool                  `json:"floatingUserId" desc:"set to true to allow the cluster to dynamically assign a user ID"`
-	RunAsUser        float64               `json:"runAsUser" desc:"Explicitly set the user ID for the container to run as. Default is 10101"`
-	FsGroup          float64               `json:"fsGroup" desc:"Explicitly set the group ID for volume ownership. Default is 10101"`
+	Image                         *Image                `json:"image,omitempty"`
+	HttpPort                      int                   `json:"httpPort,omitempty" desc:"HTTP port for the gateway service target port"`
+	HttpsPort                     int                   `json:"httpsPort,omitempty" desc:"HTTPS port for the gateway service target port"`
+	ExtraPorts                    []interface{}         `json:"extraPorts,omitempty" desc:"extra ports for the gateway pod"`
+	ExtraAnnotations              map[string]string     `json:"extraAnnotations,omitempty" desc:"extra annotations to add to the pod"`
+	NodeName                      string                `json:"nodeName,omitempty" desc:"name of node to run on"`
+	NodeSelector                  map[string]string     `json:"nodeSelector,omitempty" desc:"label selector for nodes"`
+	Tolerations                   []*appsv1.Toleration  `json:"tolerations,omitEmpty"`
+	Probes                        bool                  `json:"probes" desc:"enable liveness and readiness probes"`
+	Resources                     *ResourceRequirements `json:"resources,omitempty"`
+	DisableNetBind                bool                  `json:"disableNetBind" desc:"don't add the NET_BIND_SERVICE capability to the pod. This means that the gateway proxy will not be able to bind to ports below 1024"`
+	RunUnprivileged               bool                  `json:"runUnprivileged" desc:"run envoy as an unprivileged user"`
+	FloatingUserId                bool                  `json:"floatingUserId" desc:"set to true to allow the cluster to dynamically assign a user ID"`
+	RunAsUser                     float64               `json:"runAsUser" desc:"Explicitly set the user ID for the container to run as. Default is 10101"`
+	FsGroup                       float64               `json:"fsGroup" desc:"Explicitly set the group ID for volume ownership. Default is 10101"`
+	GracefulShutdown              *GracefulShutdownSpec `json:"gracefulShutdown,omitempty"`
+	TerminationGracePeriodSeconds int                   `json:"terminationGracePeriodSeconds" desc:"Time in seconds to wait for the pod to terminate gracefully. See [kubernetes docs](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#podspec-v1-core) for more info"`
+	CustomReadinessProbe          *appsv1.Probe         `json:"customReadinessProbe,omitEmpty"`
+}
+
+type GracefulShutdownSpec struct {
+	Enabled          bool `json:"enabled" desc:"Enable grace period before shutdown to finish current requests while envoy health checks fail to e.g. notify external load balancers. *NOTE:* This will not have any effect if you have not defined health checks via the health check filter"`
+	SleepTimeSeconds int  `json:"sleepTimeSeconds" desc:"Time (in seconds) for the preStop hook to wait before allowing envoy to terminate"`
 }
 
 type GatewayProxyService struct {

@@ -1018,6 +1018,105 @@ var _ = Describe("Helm Test", func() {
 						testManifest.ExpectDeploymentAppsV1(gatewayProxyDeployment)
 					})
 
+					It("supports custom readiness probe", func() {
+						prepareMakefile(namespace, helmValues{
+							valuesArgs: []string{
+								"gatewayProxies.gatewayProxy.podTemplate.probes=true",
+								"gatewayProxies.gatewayProxy.podTemplate.customReadinessProbe.initialDelaySeconds=5",
+								"gatewayProxies.gatewayProxy.podTemplate.customReadinessProbe.failureThreshold=3",
+								"gatewayProxies.gatewayProxy.podTemplate.customReadinessProbe.periodSeconds=10",
+								"gatewayProxies.gatewayProxy.podTemplate.customReadinessProbe.httpGet.path=/gloo/health",
+								"gatewayProxies.gatewayProxy.podTemplate.customReadinessProbe.httpGet.port=8080",
+								"gatewayProxies.gatewayProxy.podTemplate.customReadinessProbe.httpGet.scheme=HTTP",
+							},
+						})
+
+						gatewayProxyDeployment.Spec.Template.Spec.Containers[0].ReadinessProbe = &v1.Probe{
+							Handler: v1.Handler{
+								HTTPGet: &v1.HTTPGetAction{
+									Path:   "/gloo/health",
+									Port:   intstr.FromInt(8080),
+									Scheme: "HTTP",
+								},
+							},
+							InitialDelaySeconds: 5,
+							PeriodSeconds:       10,
+							FailureThreshold:    3,
+						}
+						gatewayProxyDeployment.Spec.Template.Spec.Containers[0].LivenessProbe = &v1.Probe{
+							Handler: v1.Handler{
+								Exec: &v1.ExecAction{
+									Command: []string{
+										"wget", "-O", "/dev/null", "127.0.0.1:19000/server_info",
+									},
+								},
+							},
+							InitialDelaySeconds: 1,
+							PeriodSeconds:       10,
+							FailureThreshold:    10,
+						}
+
+						testManifest.ExpectDeploymentAppsV1(gatewayProxyDeployment)
+					})
+
+					It("renders terminationGracePeriodSeconds when present", func() {
+						prepareMakefile(namespace, helmValues{
+							valuesArgs: []string{
+								"gatewayProxies.gatewayProxy.podTemplate.terminationGracePeriodSeconds=45",
+							},
+						})
+
+						intz := int64(45)
+						gatewayProxyDeployment.Spec.Template.Spec.TerminationGracePeriodSeconds = &intz
+
+						testManifest.ExpectDeploymentAppsV1(gatewayProxyDeployment)
+					})
+
+					It("renders preStop hook for gracefulShutdown", func() {
+						prepareMakefile(namespace, helmValues{
+							valuesArgs: []string{
+								"gatewayProxies.gatewayProxy.podTemplate.gracefulShutdown.enabled=true",
+							},
+						})
+
+						gatewayProxyDeployment.Spec.Template.Spec.Containers[0].Lifecycle = &v1.Lifecycle{
+							PreStop: &v1.Handler{
+								Exec: &v1.ExecAction{
+									Command: []string{
+										"/bin/sh",
+										"-c",
+										"wget --post-data \"\" -O /dev/null 127.0.0.1:19000/healthcheck/fail; sleep 25",
+									},
+								},
+							},
+						}
+
+						testManifest.ExpectDeploymentAppsV1(gatewayProxyDeployment)
+					})
+
+					It("renders preStop hook for gracefulShutdown with custom sleep time", func() {
+						prepareMakefile(namespace, helmValues{
+							valuesArgs: []string{
+								"gatewayProxies.gatewayProxy.podTemplate.gracefulShutdown.enabled=true",
+								"gatewayProxies.gatewayProxy.podTemplate.gracefulShutdown.sleepTimeSeconds=45",
+							},
+						})
+
+						gatewayProxyDeployment.Spec.Template.Spec.Containers[0].Lifecycle = &v1.Lifecycle{
+							PreStop: &v1.Handler{
+								Exec: &v1.ExecAction{
+									Command: []string{
+										"/bin/sh",
+										"-c",
+										"wget --post-data \"\" -O /dev/null 127.0.0.1:19000/healthcheck/fail; sleep 45",
+									},
+								},
+							},
+						}
+
+						testManifest.ExpectDeploymentAppsV1(gatewayProxyDeployment)
+					})
+
 					It("has limits", func() {
 						prepareMakefile(namespace, helmValues{
 							valuesArgs: []string{
@@ -1332,6 +1431,59 @@ spec:
 						testManifest.ExpectUnstructured(settings.GetKind(), settings.GetNamespace(), settings.GetName()).To(BeEquivalentTo(settings))
 					})
 
+					It("correctly allows setting ratelimit descriptors in the rateLimit field.", func() {
+						settings := makeUnstructured(`
+apiVersion: gloo.solo.io/v1
+kind: Settings
+metadata:
+  labels:
+    app: gloo
+  name: default
+  namespace: ` + namespace + `
+spec:
+ discovery:
+   fdsMode: WHITELIST
+ gateway:
+   readGatewaysFromAllNamespaces: false
+   validation:
+     alwaysAccept: true
+     allowWarnings: true
+     proxyValidationServerAddr: gloo:9988
+ gloo:
+   xdsBindAddr: 0.0.0.0:9977
+   restXdsBindAddr: 0.0.0.0:9976
+   disableKubernetesDestinations: false
+   disableProxyGarbageCollection: false
+   invalidConfigPolicy:
+     invalidRouteResponseBody: Gloo Gateway has invalid configuration. Administrators should run
+       ` + "`" + `glooctl check` + "`" + ` to find and fix config errors.
+     invalidRouteResponseCode: 404
+
+ kubernetesArtifactSource: {}
+ kubernetesConfigSource: {}
+ kubernetesSecretSource: {}
+ refreshRate: 60s
+ discoveryNamespace: ` + namespace + `
+ rateLimit:
+   descriptors:
+     - key: generic_key
+       value: "per-second"
+       rateLimit:
+         requestsPerUnit: 2
+         unit: SECOND
+`)
+
+						prepareMakefile(namespace, helmValues{
+							valuesArgs: []string{
+								"settings.rateLimit.descriptors[0].key=generic_key",
+								"settings.rateLimit.descriptors[0].value=per-second",
+								"settings.rateLimit.descriptors[0].rateLimit.requestsPerUnit=2",
+								"settings.rateLimit.descriptors[0].rateLimit.unit=SECOND",
+							},
+						})
+						testManifest.ExpectUnstructured(settings.GetKind(), settings.GetNamespace(), settings.GetName()).To(BeEquivalentTo(settings))
+					})
+
 					It("correctly sets the `disableProxyGarbageCollection` field in the settings", func() {
 						settings := makeUnstructured(`
 apiVersion: gloo.solo.io/v1
@@ -1370,6 +1522,99 @@ spec:
 						prepareMakefile(namespace, helmValues{
 							valuesArgs: []string{
 								"settings.disableProxyGarbageCollection=true",
+							},
+						})
+						testManifest.ExpectUnstructured(settings.GetKind(), settings.GetNamespace(), settings.GetName()).To(BeEquivalentTo(settings))
+					})
+
+					It("enable default credentials", func() {
+						settings := makeUnstructured(`
+apiVersion: gloo.solo.io/v1
+kind: Settings
+metadata:
+  labels:
+    app: gloo
+  name: default
+  namespace: ` + namespace + `
+spec:
+  discovery:
+    fdsMode: WHITELIST
+  gateway:
+    readGatewaysFromAllNamespaces: false
+    validation:
+      alwaysAccept: true
+      allowWarnings: true
+      proxyValidationServerAddr: gloo:9988
+  gloo:
+    xdsBindAddr: 0.0.0.0:9977
+    restXdsBindAddr: 0.0.0.0:9976
+    disableKubernetesDestinations: false
+    disableProxyGarbageCollection: false
+    awsOptions:
+      enableCredentialsDiscovey: true
+    invalidConfigPolicy:
+      invalidRouteResponseBody: Gloo Gateway has invalid configuration. Administrators should run
+        ` + "`" + `glooctl check` + "`" + ` to find and fix config errors.
+      invalidRouteResponseCode: 404
+
+  kubernetesArtifactSource: {}
+  kubernetesConfigSource: {}
+  kubernetesSecretSource: {}
+  refreshRate: 60s
+  discoveryNamespace: ` + namespace + `
+`)
+
+						prepareMakefile(namespace, helmValues{
+							valuesArgs: []string{
+								"settings.aws.enableCredentialsDiscovery=true",
+							},
+						})
+						testManifest.ExpectUnstructured(settings.GetKind(), settings.GetNamespace(), settings.GetName()).To(BeEquivalentTo(settings))
+					})
+
+					It("enable sts discovery", func() {
+						settings := makeUnstructured(`
+apiVersion: gloo.solo.io/v1
+kind: Settings
+metadata:
+  labels:
+    app: gloo
+  name: default
+  namespace: ` + namespace + `
+spec:
+  discovery:
+    fdsMode: WHITELIST
+  gateway:
+    readGatewaysFromAllNamespaces: false
+    validation:
+      alwaysAccept: true
+      allowWarnings: true
+      proxyValidationServerAddr: gloo:9988
+  gloo:
+    xdsBindAddr: 0.0.0.0:9977
+    restXdsBindAddr: 0.0.0.0:9976
+    disableKubernetesDestinations: false
+    disableProxyGarbageCollection: false
+    awsOptions:
+      serviceAccountCredentials:
+        cluster: aws_sts_cluster
+        uri: sts.us-east-2.amazonaws.com
+    invalidConfigPolicy:
+      invalidRouteResponseBody: Gloo Gateway has invalid configuration. Administrators should run
+        ` + "`" + `glooctl check` + "`" + ` to find and fix config errors.
+      invalidRouteResponseCode: 404
+
+  kubernetesArtifactSource: {}
+  kubernetesConfigSource: {}
+  kubernetesSecretSource: {}
+  refreshRate: 60s
+  discoveryNamespace: ` + namespace + `
+`)
+
+						prepareMakefile(namespace, helmValues{
+							valuesArgs: []string{
+								"settings.aws.enableServiceAccountCredentials=true",
+								"settings.aws.stsCredentialsRegion=us-east-2",
 							},
 						})
 						testManifest.ExpectUnstructured(settings.GetKind(), settings.GetNamespace(), settings.GetName()).To(BeEquivalentTo(settings))
@@ -2147,10 +2392,50 @@ metadata:
 					"gateway-proxy-id": "gateway-proxy",
 				}
 
+				Describe("gateway proxy - AWS", func() {
+
+					It("has a global cluster", func() {
+
+						prepareMakefile(namespace, helmValues{
+							valuesArgs: []string{"settings.aws.enableServiceAccountCredentials=true"},
+						})
+						proxySpec := make(map[string]string)
+						proxySpec["envoy.yaml"] = fmt.Sprintf(awsFmtString, "", "")
+						cmRb := ResourceBuilder{
+							Namespace: namespace,
+							Name:      gatewayProxyConfigMapName,
+							Labels:    labels,
+							Data:      proxySpec,
+						}
+						proxy := cmRb.GetConfigMap()
+						testManifest.ExpectConfigMapWithYamlData(proxy)
+					})
+
+					It("has a regional cluster", func() {
+
+						prepareMakefile(namespace, helmValues{
+							valuesArgs: []string{
+								"settings.aws.enableServiceAccountCredentials=true",
+								"settings.aws.stsCredentialsRegion=us-east-2",
+							},
+						})
+						proxySpec := make(map[string]string)
+						proxySpec["envoy.yaml"] = fmt.Sprintf(awsFmtString, "us-east-2.", "us-east-2.")
+						cmRb := ResourceBuilder{
+							Namespace: namespace,
+							Name:      gatewayProxyConfigMapName,
+							Labels:    labels,
+							Data:      proxySpec,
+						}
+						proxy := cmRb.GetConfigMap()
+						testManifest.ExpectConfigMapWithYamlData(proxy)
+					})
+				})
+
 				Describe("gateway proxy - tracing config", func() {
 					It("has a proxy without tracing", func() {
 						prepareMakefile(namespace, helmValues{
-							valuesArgs: []string{" gatewayProxies.gatewayProxy.service.extraAnnotations.test=test"},
+							valuesArgs: []string{"gatewayProxies.gatewayProxy.service.extraAnnotations.test=test"},
 						})
 						proxySpec := make(map[string]string)
 						proxySpec["envoy.yaml"] = confWithoutTracing

@@ -3,17 +3,22 @@ package e2e_test
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sts"
-	"github.com/solo-io/gloo/test/helpers"
-
+	"github.com/dgrijalva/jwt-go"
 	gwdefaults "github.com/solo-io/gloo/projects/gateway/pkg/defaults"
+	aws2 "github.com/solo-io/gloo/projects/gloo/pkg/api/external/envoy/extensions/aws"
+	"github.com/solo-io/gloo/test/helpers"
+	"github.com/solo-io/gloo/test/kube2e"
 
 	"github.com/solo-io/gloo/pkg/utils"
 
@@ -35,7 +40,13 @@ import (
 )
 
 var _ = Describe("AWS Lambda", func() {
-	const region = "us-east-1"
+	const (
+		region               = "us-east-1"
+		webIdentityTokenFile = "AWS_WEB_IDENTITY_TOKEN_FILE"
+		jwtPrivateKey        = "JWT_PRIVATE_KEY"
+		awsRoleArnSts        = "AWS_ROLE_ARN_STS"
+		awsRoleArn           = "AWS_ROLE_ARN"
+	)
 
 	var (
 		ctx           context.Context
@@ -98,11 +109,12 @@ var _ = Describe("AWS Lambda", func() {
 			},
 			UpstreamType: &gloov1.Upstream_Aws{
 				Aws: &aws_plugin.UpstreamSpec{
-					LambdaFunctions: []*aws_plugin.LambdaFunctionSpec{{
-						LambdaFunctionName: "uppercase",
-						Qualifier:          "",
-						LogicalName:        "uppercase",
-					},
+					LambdaFunctions: []*aws_plugin.LambdaFunctionSpec{
+						{
+							LambdaFunctionName: "uppercase",
+							Qualifier:          "",
+							LogicalName:        "uppercase",
+						},
 						{
 							LambdaFunctionName: "contact-form",
 							Qualifier:          "",
@@ -278,7 +290,7 @@ var _ = Describe("AWS Lambda", func() {
 			localAwsCredentials := credentials.NewSharedCredentials("", "")
 			v, err := localAwsCredentials.Get()
 			if err != nil {
-				Skip("no AWS creds available")
+				Fail("no AWS creds available")
 			}
 			var opts clients.WriteOpts
 
@@ -318,10 +330,10 @@ var _ = Describe("AWS Lambda", func() {
 	Context("Temporary Credentials", func() {
 
 		addCredentials := func() {
-
-			sess, err := session.NewSession(&aws.Config{Region: aws.String(region)})
+			localAwsCredentials := credentials.NewSharedCredentials("", "")
+			sess, err := session.NewSession(&aws.Config{Region: aws.String(region), Credentials: localAwsCredentials})
 			if err != nil {
-				Skip("no AWS creds available")
+				Fail("no AWS creds available")
 			}
 			stsClient := sts.New(sess)
 			result, err := stsClient.GetSessionToken(&sts.GetSessionTokenInput{})
@@ -350,6 +362,148 @@ var _ = Describe("AWS Lambda", func() {
 			setupEnvoy()
 			addCredentials()
 			addUpstream()
+		})
+
+		It("should be able to call lambda", testProxy)
+
+		It("should be able lambda with response transform", testProxyWithResponseTransform)
+
+		It("should be able to call lambda via gateway", testLambdaWithVirtualService)
+	})
+
+	Context("AssumeRoleWithWebIdentity Credentials", func() {
+
+		var (
+			tmpFile *os.File
+		)
+
+		addCredentialsSts := func() {
+
+			roleArn := os.Getenv(awsRoleArnSts)
+			if roleArn == "" {
+				Fail(fmt.Sprintf("AWS role arn unset, set via %s", awsRoleArnSts))
+			}
+
+			jwtKey := os.Getenv(jwtPrivateKey)
+			if jwtKey == "" {
+				Fail(fmt.Sprintf("Token location unset, set via %s", jwtPrivateKey))
+			}
+
+			// Need to store the private key in base 64 otherwise the newlines get lost in the env var
+			data, err := base64.StdEncoding.DecodeString(jwtKey)
+			Expect(err).NotTo(HaveOccurred())
+
+			privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(data)
+			Expect(err).NotTo(HaveOccurred())
+
+			now := time.Now()
+
+			tokenToSign := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+				"sub":   "1234567890",
+				"name":  "Solo Test User",
+				"admin": true,
+				"iat":   now.Unix(),
+				"exp":   now.Add(time.Minute * 10).Unix(),
+				"nbf":   now.Unix(),
+				"iss":   "https://fake-oidc.solo.io",
+				"aud":   "sts.amazonaws.com",
+				"kid":   "test1",
+			})
+
+			signedJwt, err := tokenToSign.SignedString(privateKey)
+			Expect(err).NotTo(HaveOccurred())
+
+			tmpFile, err = ioutil.TempFile("/tmp", "")
+			Expect(err).NotTo(HaveOccurred())
+			defer tmpFile.Close()
+
+			_, err = tmpFile.Write([]byte(signedJwt))
+			Expect(err).NotTo(HaveOccurred())
+
+			// Have to set these values for tests which use the envoy binary
+			os.Setenv(webIdentityTokenFile, tmpFile.Name())
+			os.Setenv(awsRoleArn, roleArn)
+
+			envoyInstance.DockerOptions = services.DockerOptions{
+				Volumes: []string{fmt.Sprintf("%s:%s", tmpFile.Name(), tmpFile.Name())},
+				Env:     []string{webIdentityTokenFile, awsRoleArn},
+			}
+		}
+
+		addUpstreamSts := func() {
+			upstream = &gloov1.Upstream{
+				Metadata: core.Metadata{
+					Namespace: "default",
+					Name:      region,
+				},
+				UpstreamType: &gloov1.Upstream_Aws{
+					Aws: &aws_plugin.UpstreamSpec{
+						LambdaFunctions: []*aws_plugin.LambdaFunctionSpec{
+							{
+								LambdaFunctionName: "uppercase",
+								Qualifier:          "uppercase",
+								LogicalName:        "uppercase",
+							},
+							{
+								LambdaFunctionName: "contact-form",
+								Qualifier:          "uppercase",
+								LogicalName:        "contact-form",
+							},
+						},
+						Region: region,
+					},
+				},
+			}
+
+			var opts clients.WriteOpts
+			_, err := testClients.UpstreamClient.Write(upstream, opts)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		setupEnvoySts := func() {
+			ctx, cancel = context.WithCancel(context.Background())
+			defaults.HttpPort = services.NextBindPort()
+			defaults.HttpsPort = services.NextBindPort()
+			ns := defaults.GlooSystem
+			ro := &services.RunOptions{
+				NsToWrite:  ns,
+				NsToWatch:  []string{"default", ns},
+				WhatToRun:  services.What{},
+				KubeClient: kube2e.MustKubeClient(),
+				Settings: &gloov1.Settings{
+					Gloo: &gloov1.GlooOptions{
+						AwsOptions: &gloov1.GlooOptions_AWSOptions{
+							CredentialsFetcher: &gloov1.GlooOptions_AWSOptions_ServiceAccountCredentials{
+								ServiceAccountCredentials: &aws2.AWSLambdaConfig_ServiceAccountCredentials{
+									Cluster: "aws_sts_cluster",
+									Uri:     "sts.amazonaws.com",
+								},
+							},
+						},
+					},
+				},
+			}
+			testClients = services.RunGlooGatewayUdsFds(ctx, ro)
+
+			err := helpers.WriteDefaultGateways(defaults.GlooSystem, testClients.GatewayClient)
+			Expect(err).NotTo(HaveOccurred(), "Should be able to write default gateways")
+
+			envoyInstance, err = envoyFactory.NewEnvoyInstance()
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		BeforeEach(func() {
+			setupEnvoySts()
+			addCredentialsSts()
+			addUpstreamSts()
+		})
+
+		AfterEach(func() {
+			if tmpFile != nil {
+				os.Remove(tmpFile.Name())
+			}
+			os.Unsetenv(webIdentityTokenFile)
+			os.Unsetenv(awsRoleArn)
 		})
 
 		It("should be able to call lambda", testProxy)
