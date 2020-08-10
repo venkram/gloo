@@ -62,7 +62,6 @@ func Run(ctx context.Context, sslKeyFile, sslCertFile, sslCaFile, sdsServerAddre
 			}
 		}
 	}()
-	time.Sleep(time.Second * 3) // Give Istio a chance to start before throwing scary CrashLoops
 	watchFiles(ctx, watcher, sslKeyFile, sslCertFile, sslCaFile)
 
 	<-sigs
