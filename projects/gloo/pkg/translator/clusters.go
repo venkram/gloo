@@ -39,7 +39,7 @@ func (t *translatorInstance) computeClusters(params plugins.Params, reports repo
 
 func (t *translatorInstance) computeCluster(params plugins.Params, upstream *v1.Upstream, reports reporter.ResourceReports) *envoyapi.Cluster {
 	params.Ctx = contextutils.WithLogger(params.Ctx, upstream.Metadata.Name)
-	out := t.initializeCluster(upstream, params.Snapshot.Endpoints, reports, &params.Snapshot.Secrets )
+	out := t.initializeCluster(upstream, params.Snapshot.Endpoints, reports, &params.Snapshot.Secrets)
 
 	for _, plug := range t.plugins {
 		upstreamPlugin, ok := plug.(plugins.UpstreamPlugin)

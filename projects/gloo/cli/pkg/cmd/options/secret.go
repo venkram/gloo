@@ -8,9 +8,9 @@ import (
 )
 
 type Secret struct {
-	TlsSecret   TlsSecret
-	AwsSecret   AwsSecret
-	AzureSecret AzureSecret
+	TlsSecret    TlsSecret
+	AwsSecret    AwsSecret
+	AzureSecret  AzureSecret
 	HeaderSecret HeaderSecret
 }
 
@@ -25,7 +25,7 @@ type AzureSecret struct {
 }
 
 type HeaderSecret struct {
-	Name string
+	Name  string
 	Value string
 }
 

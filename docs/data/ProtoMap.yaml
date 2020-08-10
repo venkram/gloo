@@ -164,6 +164,9 @@ apis:
   envoy.api.v2.core.HeaderMap:
     relativepath: reference/api/envoy/api/v2/core/base.proto.sk/#HeaderMap
     package: envoy.api.v2.core
+  envoy.api.v2.core.HeaderSecretValue:
+    relativepath: reference/api/envoy/api/v2/core/base.proto.sk/#HeaderSecretValue
+    package: envoy.api.v2.core
   envoy.api.v2.core.HeaderValue:
     relativepath: reference/api/envoy/api/v2/core/base.proto.sk/#HeaderValue
     package: envoy.api.v2.core
@@ -643,6 +646,9 @@ apis:
     package: gloo.solo.io
   gloo.solo.io.GlooOptions:
     relativepath: reference/api/github.com/solo-io/gloo/projects/gloo/api/v1/settings.proto.sk/#GlooOptions
+    package: gloo.solo.io
+  gloo.solo.io.HeaderSecret:
+    relativepath: reference/api/github.com/solo-io/gloo/projects/gloo/api/v1/secret.proto.sk/#HeaderSecret
     package: gloo.solo.io
   gloo.solo.io.HealthCheckConfig:
     relativepath: reference/api/github.com/solo-io/gloo/projects/gloo/api/v1/endpoint.proto.sk/#HealthCheckConfig

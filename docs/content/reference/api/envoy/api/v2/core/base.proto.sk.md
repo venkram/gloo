@@ -17,6 +17,7 @@ weight: 5
 - [RuntimeUInt32](#runtimeuint32)
 - [RuntimeFeatureFlag](#runtimefeatureflag)
 - [HeaderValue](#headervalue)
+- [HeaderSecretValue](#headersecretvalue)
 - [HeaderValueOption](#headervalueoption)
 - [HeaderMap](#headermap)
 - [DataSource](#datasource)
@@ -195,6 +196,26 @@ Header name/value pair.
 
 
 ---
+### HeaderSecretValue
+
+ 
+Header secret lookup key.
+
+```yaml
+"name": string
+"namespace": string
+
+```
+
+| Field | Type | Description | Default |
+| ----- | ---- | ----------- |----------- | 
+| `name` | `string` |  |  |
+| `namespace` | `string` |  |  |
+
+
+
+
+---
 ### HeaderValueOption
 
  
@@ -202,13 +223,15 @@ Header name/value pair plus option to control append behavior.
 
 ```yaml
 "header": .envoy.api.v2.core.HeaderValue
+"headerSecretValue": .envoy.api.v2.core.HeaderSecretValue
 "append": .google.protobuf.BoolValue
 
 ```
 
 | Field | Type | Description | Default |
 | ----- | ---- | ----------- |----------- | 
-| `header` | [.envoy.api.v2.core.HeaderValue](../base.proto.sk/#headervalue) | Header name/value pair that this option applies to. |  |
+| `header` | [.envoy.api.v2.core.HeaderValue](../base.proto.sk/#headervalue) | Explicitly specified herader. Only one of `header` or `headerSecretValue` can be set. |  |
+| `headerSecretValue` | [.envoy.api.v2.core.HeaderSecretValue](../base.proto.sk/#headersecretvalue) | Reference to header contained in a secret. Only one of `headerSecretValue` or `header` can be set. |  |
 | `append` | [.google.protobuf.BoolValue](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/bool-value) | Should the value be appended? If true (default), the value is appended to existing values. |  |
 
 

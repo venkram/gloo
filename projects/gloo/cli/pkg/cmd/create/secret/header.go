@@ -50,8 +50,8 @@ func headerCmd(opts *options.Options) *cobra.Command {
 }
 
 const (
-	headerPromptName    = "Enter header name: "
-	headerPromptValue    = "Enter header value: "
+	headerPromptName  = "Enter header name: "
+	headerPromptValue = "Enter header value: "
 )
 
 func HeaderSecretArgsInteractive(input *options.HeaderSecret) error {
@@ -66,14 +66,14 @@ func HeaderSecretArgsInteractive(input *options.HeaderSecret) error {
 }
 
 func createHeaderSecret(ctx context.Context, meta core.Metadata, input options.HeaderSecret, dryRun bool, outputType printers.OutputType) error {
-	if input.Name == ""  {
+	if input.Name == "" {
 		return errors.Errorf("must provide header name")
 	}
 	secret := &gloov1.Secret{
 		Metadata: meta,
 		Kind: &gloov1.Secret_Header{
 			Header: &gloov1.HeaderSecret{
-				Name: input.Name,
+				Name:  input.Name,
 				Value: input.Value,
 			},
 		},

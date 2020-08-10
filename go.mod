@@ -2,6 +2,8 @@ module github.com/solo-io/gloo
 
 go 1.14
 
+replace github.com/solo-io/solo-kit => /Users/jhawley/go/src/github.com/solo-io/solo-kit
+
 require (
 	github.com/Masterminds/semver/v3 v3.0.3
 	github.com/Netflix/go-expect v0.0.0-20180928190340-9d1f4485533b
