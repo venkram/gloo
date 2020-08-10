@@ -164,9 +164,6 @@ apis:
   envoy.api.v2.core.HeaderMap:
     relativepath: reference/api/envoy/api/v2/core/base.proto.sk/#HeaderMap
     package: envoy.api.v2.core
-  envoy.api.v2.core.HeaderSecretValue:
-    relativepath: reference/api/envoy/api/v2/core/base.proto.sk/#HeaderSecretValue
-    package: envoy.api.v2.core
   envoy.api.v2.core.HeaderValue:
     relativepath: reference/api/envoy/api/v2/core/base.proto.sk/#HeaderValue
     package: envoy.api.v2.core

@@ -2,8 +2,6 @@ module github.com/solo-io/gloo
 
 go 1.14
 
-replace github.com/solo-io/solo-kit => /Users/jhawley/go/src/github.com/solo-io/solo-kit
-
 require (
 	github.com/Masterminds/semver/v3 v3.0.3
 	github.com/Netflix/go-expect v0.0.0-20180928190340-9d1f4485533b
@@ -61,7 +59,7 @@ require (
 	github.com/solo-io/reporting-client v0.1.2
 	github.com/solo-io/skv2 v0.7.2
 	github.com/solo-io/solo-apis v0.0.0-20200717214114-6a1daa5a5d05
-	github.com/solo-io/solo-kit v0.13.10
+	github.com/solo-io/solo-kit v0.13.11
 	github.com/solo-io/wasme v0.0.13-rc1
 	github.com/spf13/afero v1.2.2
 	github.com/spf13/cobra v0.0.5

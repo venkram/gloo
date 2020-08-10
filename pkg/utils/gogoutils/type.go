@@ -59,8 +59,8 @@ func ToEnvoyHeaderValueOption(option *envoycore_sk.HeaderValueOption, secrets *v
 	case *envoycore_sk.HeaderValueOption_Header:
 		key = typedOption.Header.GetKey()
 		value = typedOption.Header.GetValue()
-	case *envoycore_sk.HeaderValueOption_HeaderSecretValue:
-		secret, err := secrets.Find(typedOption.HeaderSecretValue.GetNamespace(), typedOption.HeaderSecretValue.GetName())
+	case *envoycore_sk.HeaderValueOption_HeaderSecretRef:
+		secret, err := secrets.Find(typedOption.HeaderSecretRef.GetNamespace(), typedOption.HeaderSecretRef.GetName())
 		if err != nil {
 			// TODO(jhawley): Handle?
 		}
