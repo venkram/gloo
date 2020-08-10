@@ -2,18 +2,25 @@ package main
 
 import (
 	"context"
+	"os"
 
 	"github.com/solo-io/gloo/pkg/version"
 	"github.com/solo-io/gloo/projects/sds/pkg/run"
 	"github.com/solo-io/go-utils/contextutils"
-	v1 "k8s.io/api/core/v1"
+	// v1 "k8s.io/api/core/v1"
 )
 
 var (
-	secretDir   = "/etc/envoy/ssl/"
-	sslKeyFile  = secretDir + v1.TLSPrivateKeyKey        //tls.key
-	sslCertFile = secretDir + v1.TLSCertKey              //tls.crt
-	sslCaFile   = secretDir + v1.ServiceAccountRootCAKey //ca.crt
+	// secretDir   = "/etc/envoy/ssl/"
+	// sslKeyFile  = secretDir + v1.TLSPrivateKeyKey        //tls.key
+	// sslCertFile = secretDir + v1.TLSCertKey              //tls.crt
+	// sslCaFile   = secretDir + v1.ServiceAccountRootCAKey //ca.crt
+
+	// TODO: Remove Istio test code, make configurable.
+	secretDir   = "/etc/istio-certs/"
+	sslCaFile   = secretDir + "root-cert.pem"
+	sslKeyFile  = secretDir + "key.pem"
+	sslCertFile = secretDir + "cert-chain.pem"
 
 	// This must match the value of the sds_config target_uri in the envoy instance that it is providing
 	// secrets to.
@@ -21,6 +28,12 @@ var (
 )
 
 func main() {
+	if envKeyDir := os.Getenv("KEY_DIR"); envKeyDir != "" {
+		secretDir = envKeyDir
+	}
+	if envSDSAddr := os.Getenv("SDS_SERVER_ADDRESS"); envSDSAddr != "" {
+		sdsServerAddress = envSDSAddr
+	}
 
 	ctx := contextutils.WithLogger(context.Background(), "sds_server")
 	ctx = contextutils.WithLoggerValues(ctx, "version", version.Version)

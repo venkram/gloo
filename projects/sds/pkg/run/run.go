@@ -7,9 +7,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"go.uber.org/zap"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/solo-io/gloo/projects/sds/pkg/server"
 	"github.com/solo-io/go-utils/contextutils"
 )
@@ -23,18 +23,21 @@ func Run(ctx context.Context, sslKeyFile, sslCertFile, sslCaFile, sdsServerAddre
 	// Run the gRPC Server
 	serverStopped, err := server.RunSDSServer(ctx, grpcServer, sdsServerAddress) // runs the grpc server in internal goroutines
 	if err != nil {
+		cancel()
 		return err
 	}
 
 	// Initialize the SDS config
 	err = server.UpdateSDSConfig(ctx, sslKeyFile, sslCertFile, sslCaFile, snapshotCache)
 	if err != nil {
+		cancel()
 		return err
 	}
 
 	// create a new file watcher
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
+		cancel()
 		return err
 	}
 	defer watcher.Close()
@@ -59,6 +62,7 @@ func Run(ctx context.Context, sslKeyFile, sslCertFile, sslCaFile, sdsServerAddre
 			}
 		}
 	}()
+	time.Sleep(time.Second * 3) // Give Istio a chance to start before throwing scary CrashLoops
 	watchFiles(ctx, watcher, sslKeyFile, sslCertFile, sslCaFile)
 
 	<-sigs
@@ -72,6 +76,7 @@ func Run(ctx context.Context, sslKeyFile, sslCertFile, sslCaFile, sdsServerAddre
 }
 
 func watchFiles(ctx context.Context, watcher *fsnotify.Watcher, sslKeyFile string, sslCertFile string, sslCaFile string) {
+	contextutils.LoggerFrom(ctx).Infow("watcher started", zap.String("sslKeyFile", sslKeyFile), zap.String("sshCertFile", sslCertFile), zap.String("sslCaFile", sslCaFile))
 	if err := watcher.Add(sslKeyFile); err != nil {
 		contextutils.LoggerFrom(ctx).Warn(zap.Error(err))
 	}
