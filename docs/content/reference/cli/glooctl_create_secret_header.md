@@ -4,11 +4,11 @@ weight: 5
 ---
 ## glooctl create secret header
 
-Create an header secret with the given name
+Create a header secret with the given name
 
 ### Synopsis
 
-Create an header secret with the given name. The format of the secret data is: `{"header-name" : [header-name string] , "value" : [header-value string]}`
+Create a header secret with the given name. The format of the secret data is: `{"header-name" : [header-name string] , "value" : [header-value string]}`
 
 ```
 glooctl create secret header [flags]
