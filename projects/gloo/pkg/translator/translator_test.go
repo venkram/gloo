@@ -695,7 +695,7 @@ var _ = Describe("Translator", func() {
 			upstream.GetHealthChecks()[0].GetHttpHealthCheck().RequestHeadersToAdd = []*envoycore_sk.HeaderValueOption{
 				{
 					HeaderOption: &envoycore_sk.HeaderValueOption_HeaderSecretRef{
-						HeaderSecretRef: &envoycore_sk.HeaderSecretRef{
+						HeaderSecretRef: &core.ResourceRef{
 							Name:      "foo",
 							Namespace: "bar",
 						},

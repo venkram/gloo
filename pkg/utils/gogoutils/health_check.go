@@ -128,13 +128,17 @@ func ToEnvoyHealthCheck(check *envoycore_gloo.HealthCheck, secrets *v1.SecretLis
 			},
 		}
 	case *envoycore_gloo.HealthCheck_HttpHealthCheck_:
+		var requestHeadersToAdd, err = ToEnvoyHeaderValueOptionList(typed.HttpHealthCheck.GetRequestHeadersToAdd(), secrets)
+		if err != nil {
+			return nil, err
+		}
 		hc.HealthChecker = &envoycore.HealthCheck_HttpHealthCheck_{
 			HttpHealthCheck: &envoycore.HealthCheck_HttpHealthCheck{
 				Host:                   typed.HttpHealthCheck.GetHost(),
 				Path:                   typed.HttpHealthCheck.GetPath(),
 				UseHttp2:               typed.HttpHealthCheck.GetUseHttp2(),
 				ServiceName:            typed.HttpHealthCheck.GetServiceName(),
-				RequestHeadersToAdd:    ToEnvoyHeaderValueOptionList(typed.HttpHealthCheck.GetRequestHeadersToAdd(), secrets),
+				RequestHeadersToAdd:    requestHeadersToAdd,
 				RequestHeadersToRemove: typed.HttpHealthCheck.GetRequestHeadersToRemove(),
 				ExpectedStatuses:       ToEnvoyInt64RangeList(typed.HttpHealthCheck.GetExpectedStatuses()),
 			},

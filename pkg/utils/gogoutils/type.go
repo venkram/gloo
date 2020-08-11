@@ -6,6 +6,7 @@ import (
 	envoytype_gloo "github.com/solo-io/gloo/projects/gloo/pkg/api/external/envoy/type"
 	v1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
 	envoycore_sk "github.com/solo-io/solo-kit/pkg/api/external/envoy/api/v2/core"
+	"github.com/solo-io/solo-kit/pkg/errors"
 )
 
 // Converts between Envoy and Gloo/solokit versions of envoy protos
@@ -45,15 +46,19 @@ func ToEnvoyInt64Range(int64Range *envoytype_gloo.Int64Range) *envoytype.Int64Ra
 	}
 }
 
-func ToEnvoyHeaderValueOptionList(option []*envoycore_sk.HeaderValueOption, secrets *v1.SecretList) []*envoycore.HeaderValueOption {
+func ToEnvoyHeaderValueOptionList(option []*envoycore_sk.HeaderValueOption, secrets *v1.SecretList) ([]*envoycore.HeaderValueOption, error) {
 	result := make([]*envoycore.HeaderValueOption, len(option))
+	var err error
 	for i, v := range option {
-		result[i] = ToEnvoyHeaderValueOption(v, secrets)
+		result[i], err = ToEnvoyHeaderValueOption(v, secrets)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return result
+	return result, nil
 }
 
-func ToEnvoyHeaderValueOption(option *envoycore_sk.HeaderValueOption, secrets *v1.SecretList) *envoycore.HeaderValueOption {
+func ToEnvoyHeaderValueOption(option *envoycore_sk.HeaderValueOption, secrets *v1.SecretList) (*envoycore.HeaderValueOption, error) {
 	var key, value string
 	switch typedOption := option.HeaderOption.(type) {
 	case *envoycore_sk.HeaderValueOption_Header:
@@ -62,12 +67,12 @@ func ToEnvoyHeaderValueOption(option *envoycore_sk.HeaderValueOption, secrets *v
 	case *envoycore_sk.HeaderValueOption_HeaderSecretRef:
 		secret, err := secrets.Find(typedOption.HeaderSecretRef.GetNamespace(), typedOption.HeaderSecretRef.GetName())
 		if err != nil {
-			// TODO(jhawley): Handle?
+			return nil, err
 		}
 
 		headerSecrets, ok := secret.Kind.(*v1.Secret_Header)
 		if !ok {
-			// TODO(jhawley): Handle?
+			return nil, errors.Errorf("Secret %v.%v was not a Header secret", typedOption.HeaderSecretRef.GetNamespace(), typedOption.HeaderSecretRef.GetName())
 		}
 
 		key = headerSecrets.Header.GetName()
@@ -80,7 +85,7 @@ func ToEnvoyHeaderValueOption(option *envoycore_sk.HeaderValueOption, secrets *v
 			Value: value,
 		},
 		Append: BoolGogoToProto(option.GetAppend()),
-	}
+	}, nil
 }
 
 func ToGlooHeaderValueOptionList(option []*envoycore.HeaderValueOption) []*envoycore_sk.HeaderValueOption {
