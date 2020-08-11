@@ -2,8 +2,10 @@ package run_test
 
 import (
 	"context"
+	"io/ioutil"
 	"os"
 	"path"
+	"time"
 
 	envoy_api_v2 "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	envoy_service_discovery_v2 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
@@ -24,7 +26,9 @@ var _ = Describe("SDS Server E2E Test", func() {
 		dir                                            string
 		keyName, certName, caName                      string
 		keyNameSymlink, certNameSymlink, caNameSymlink string
+		secret                                         server.Secret
 		testServerAddress                              = "127.0.0.1:8236"
+		sdsClient                                      = "test-client"
 	)
 
 	BeforeEach(func() {
@@ -52,6 +56,14 @@ var _ = Describe("SDS Server E2E Test", func() {
 		Expect(err).To(BeNil())
 		err = os.Symlink(caName, caNameSymlink)
 		Expect(err).To(BeNil())
+
+		secret = server.Secret{
+			ServerCert:        "test-cert",
+			ValidationContext: "test-validation-context",
+			SslCaFile:         caName,
+			SslCertFile:       certName,
+			SslKeyFile:        keyName,
+		}
 	})
 
 	AfterEach(func() {
@@ -61,10 +73,13 @@ var _ = Describe("SDS Server E2E Test", func() {
 	It("runs and stops correctly", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		go func() {
-			if err := run.Run(ctx, keyNameSymlink, certNameSymlink, caNameSymlink, testServerAddress); err != nil {
+			if err := run.Run(ctx, []server.Secret{secret}, sdsClient, testServerAddress); err != nil {
 				Expect(err).To(BeNil())
 			}
 		}()
+
+		// Give it a second to spin up + read the files
+		time.Sleep(1 * time.Second)
 
 		// Connect with the server
 		var conn *grpc.ClientConn
@@ -72,6 +87,7 @@ var _ = Describe("SDS Server E2E Test", func() {
 		Expect(err).To(BeNil())
 		defer conn.Close()
 		client := envoy_service_discovery_v2.NewSecretDiscoveryServiceClient(conn)
+
 		_, err = client.FetchSecrets(context.TODO(), &envoy_api_v2.DiscoveryRequest{})
 		Expect(err).To(BeNil())
 
@@ -88,7 +104,10 @@ var _ = Describe("SDS Server E2E Test", func() {
 
 	It("correctly picks up multiple cert rotations", func() {
 
-		go run.Run(context.Background(), keyNameSymlink, certNameSymlink, caNameSymlink, testServerAddress)
+		go run.Run(context.Background(), []server.Secret{secret}, sdsClient, testServerAddress)
+
+		// Give it a second to spin up + read the files
+		time.Sleep(1 * time.Second)
 
 		// Connect with the server
 		var conn *grpc.ClientConn
@@ -97,9 +116,12 @@ var _ = Describe("SDS Server E2E Test", func() {
 		defer conn.Close()
 		client := envoy_service_discovery_v2.NewSecretDiscoveryServiceClient(conn)
 
-		snapshotVersion, err := server.GetSnapshotVersion(keyName, certName, caName)
+		// Read certs
+		certs := filesToBytes(keyNameSymlink, certNameSymlink, caNameSymlink)
+
+		snapshotVersion, err := server.GetSnapshotVersion(certs)
 		Expect(err).To(BeNil())
-		Expect(snapshotVersion).To(Equal("11240719828806193304"))
+		Expect(snapshotVersion).To(Equal("6730780456972595554"))
 		resp, err := client.FetchSecrets(context.TODO(), &envoy_api_v2.DiscoveryRequest{})
 		Expect(err).To(BeNil())
 		Eventually(func() bool {
@@ -114,9 +136,12 @@ var _ = Describe("SDS Server E2E Test", func() {
 		err = afero.WriteFile(fs, keyName, []byte("tls.key-1"), 0644)
 		Expect(err).To(BeNil())
 
-		snapshotVersion, err = server.GetSnapshotVersion(keyName, certName, caName)
+		// Re-read certs
+		certs = filesToBytes(keyNameSymlink, certNameSymlink, caNameSymlink)
+
+		snapshotVersion, err = server.GetSnapshotVersion(certs)
 		Expect(err).To(BeNil())
-		Expect(snapshotVersion).To(Equal("15601967965718698291"))
+		Expect(snapshotVersion).To(Equal("16241649556325798095"))
 		resp, err = client.FetchSecrets(context.TODO(), &envoy_api_v2.DiscoveryRequest{})
 		Eventually(func() bool {
 			resp, err = client.FetchSecrets(context.TODO(), &envoy_api_v2.DiscoveryRequest{})
@@ -130,9 +155,12 @@ var _ = Describe("SDS Server E2E Test", func() {
 		err = afero.WriteFile(fs, keyName, []byte("tls.key-2"), 0644)
 		Expect(err).To(BeNil())
 
-		snapshotVersion, err = server.GetSnapshotVersion(keyName, certName, caName)
+		// Re-read certs again
+		certs = filesToBytes(keyNameSymlink, certNameSymlink, caNameSymlink)
+
+		snapshotVersion, err = server.GetSnapshotVersion(certs)
 		Expect(err).To(BeNil())
-		Expect(snapshotVersion).To(Equal("11448956642433776987"))
+		Expect(snapshotVersion).To(Equal("7644406922477208950"))
 		resp, err = client.FetchSecrets(context.TODO(), &envoy_api_v2.DiscoveryRequest{})
 		Expect(err).To(BeNil())
 		Eventually(func() bool {
@@ -142,3 +170,17 @@ var _ = Describe("SDS Server E2E Test", func() {
 		}, "5s", "1s").Should(BeTrue())
 	})
 })
+
+func filesToBytes(keyName, certName, caName string) [][]byte {
+	certs := [][]byte{}
+	keyBytes, err := ioutil.ReadFile(keyName)
+	Expect(err).NotTo(HaveOccurred())
+	certs = append(certs, keyBytes)
+	certBytes, err := ioutil.ReadFile(certName)
+	Expect(err).NotTo(HaveOccurred())
+	certs = append(certs, certBytes)
+	caBytes, err := ioutil.ReadFile(caName)
+	Expect(err).NotTo(HaveOccurred())
+	certs = append(certs, caBytes)
+	return certs
+}

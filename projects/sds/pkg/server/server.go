@@ -114,7 +114,7 @@ func (s *Server) UpdateSDSConfig(ctx context.Context) error {
 		items = append(items, validationContextSecret(ca, sec.ValidationContext))
 	}
 
-	snapshotVersion, err := getSnapshotVersion(certs)
+	snapshotVersion, err := GetSnapshotVersion(certs)
 	if err != nil {
 		contextutils.LoggerFrom(ctx).Info("Error getting snapshot version", zap.Error(err))
 		return err
@@ -126,8 +126,8 @@ func (s *Server) UpdateSDSConfig(ctx context.Context) error {
 	return s.snapshotCache.SetSnapshot(s.sdsClient, secretSnapshot)
 }
 
-// getSnapshotVersion generates a version string by hashing the certs
-func getSnapshotVersion(certs ...interface{}) (string, error) {
+// GetSnapshotVersion generates a version string by hashing the certs
+func GetSnapshotVersion(certs ...interface{}) (string, error) {
 	hash, err := hashutils.HashAllSafe(fnv.New64(), certs...)
 	return fmt.Sprintf("%d", hash), err
 }
