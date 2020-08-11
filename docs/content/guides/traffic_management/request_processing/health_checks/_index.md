@@ -49,4 +49,4 @@ There are two ways to add custom headers to health check requests, both of which
             append: true
 {{< /highlight >}}
 
-A `header` represents an explicitly-specified header where the key is the header name and the value is the header value. In contrast, a `headerSecretRef` points to a header contained in a Kubernetes secret. Secrets for this purpose can be created with `glooctl` (instructions [here](https://docs.solo.io/gloo/latest/reference/cli/glooctl_create_secret_header/)).
+A `header` represents an explicitly-specified header where the key is the header name and the value is the header value. In contrast, a `headerSecretRef` points to a header contained in a Kubernetes secret. Secrets for this purpose can be created with glooctl (instructions [here](https://docs.solo.io/gloo/latest/reference/cli/glooctl_create_secret_header/)).
