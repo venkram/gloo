@@ -14,21 +14,20 @@ import (
 	"github.com/solo-io/go-utils/contextutils"
 )
 
-func Run(ctx context.Context, sslKeyFile, sslCertFile, sslCaFile, sdsServerAddress string) error {
+func Run(ctx context.Context, secrets []server.Secret, sdsClient, sdsServerAddress string) error {
 	ctx, cancel := context.WithCancel(ctx)
 
 	// Set up the gRPC server
-	grpcServer, snapshotCache := server.SetupEnvoySDS()
-
+	sdsServer := server.SetupEnvoySDS(secrets, sdsClient, sdsServerAddress)
 	// Run the gRPC Server
-	serverStopped, err := server.RunSDSServer(ctx, grpcServer, sdsServerAddress) // runs the grpc server in internal goroutines
+	serverStopped, err := sdsServer.Run(ctx) // runs the grpc server in internal goroutines
 	if err != nil {
 		cancel()
 		return err
 	}
 
 	// Initialize the SDS config
-	err = server.UpdateSDSConfig(ctx, sslKeyFile, sslCertFile, sslCaFile, snapshotCache)
+	err = sdsServer.UpdateSDSConfig(ctx)
 	if err != nil {
 		cancel()
 		return err
@@ -52,8 +51,8 @@ func Run(ctx context.Context, sslKeyFile, sslCertFile, sslCaFile, sdsServerAddre
 			// watch for events
 			case event := <-watcher.Events:
 				contextutils.LoggerFrom(ctx).Infow("received event", zap.Any("event", event))
-				server.UpdateSDSConfig(ctx, sslKeyFile, sslCertFile, sslCaFile, snapshotCache)
-				watchFiles(ctx, watcher, sslKeyFile, sslCertFile, sslCaFile)
+				sdsServer.UpdateSDSConfig(ctx)
+				watchFiles(ctx, watcher, secrets)
 			// watch for errors
 			case err := <-watcher.Errors:
 				contextutils.LoggerFrom(ctx).Warnw("Received error from file watcher", zap.Error(err))
@@ -62,7 +61,7 @@ func Run(ctx context.Context, sslKeyFile, sslCertFile, sslCaFile, sdsServerAddre
 			}
 		}
 	}()
-	watchFiles(ctx, watcher, sslKeyFile, sslCertFile, sslCaFile)
+	watchFiles(ctx, watcher, secrets)
 
 	<-sigs
 	cancel()
@@ -74,15 +73,17 @@ func Run(ctx context.Context, sslKeyFile, sslCertFile, sslCaFile, sdsServerAddre
 	}
 }
 
-func watchFiles(ctx context.Context, watcher *fsnotify.Watcher, sslKeyFile string, sslCertFile string, sslCaFile string) {
-	contextutils.LoggerFrom(ctx).Infow("watcher started", zap.String("sslKeyFile", sslKeyFile), zap.String("sshCertFile", sslCertFile), zap.String("sslCaFile", sslCaFile))
-	if err := watcher.Add(sslKeyFile); err != nil {
-		contextutils.LoggerFrom(ctx).Warn(zap.Error(err))
-	}
-	if err := watcher.Add(sslCertFile); err != nil {
-		contextutils.LoggerFrom(ctx).Warn(zap.Error(err))
-	}
-	if err := watcher.Add(sslCaFile); err != nil {
-		contextutils.LoggerFrom(ctx).Warn(zap.Error(err))
+func watchFiles(ctx context.Context, watcher *fsnotify.Watcher, secrets []server.Secret) {
+	for _, s := range secrets {
+		contextutils.LoggerFrom(ctx).Infow("watcher started", zap.String("sslKeyFile", s.SslKeyFile), zap.String("sshCertFile", s.SslCertFile), zap.String("sslCaFile", s.SslCaFile))
+		if err := watcher.Add(s.SslKeyFile); err != nil {
+			contextutils.LoggerFrom(ctx).Warn(zap.Error(err))
+		}
+		if err := watcher.Add(s.SslCertFile); err != nil {
+			contextutils.LoggerFrom(ctx).Warn(zap.Error(err))
+		}
+		if err := watcher.Add(s.SslCaFile); err != nil {
+			contextutils.LoggerFrom(ctx).Warn(zap.Error(err))
+		}
 	}
 }
