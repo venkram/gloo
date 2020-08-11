@@ -21,15 +21,15 @@ func headerCmd(opts *options.Options) *cobra.Command {
 	input := &opts.Create.InputSecret.HeaderSecret
 	cmd := &cobra.Command{
 		Use:   "header",
-		Short: `Create an header secret with the given name`,
-		Long: "Create an header secret with the given name. The format of the secret data is: " +
+		Short: `Create a header secret with the given name`,
+		Long: "Create a header secret with the given name. The format of the secret data is: " +
 			"`{\"header-name\" : [header-name string] , \"value\" : [header-value string]}`",
 		RunE: func(c *cobra.Command, args []string) error {
 			if err := argsutils.MetadataArgsParse(opts, args); err != nil {
 				return err
 			}
 			if opts.Top.Interactive {
-				// and gather any missing args that are available through interactive mode
+				// gather any missing args that are available through interactive mode
 				if err := HeaderSecretArgsInteractive(input); err != nil {
 					return err
 				}
