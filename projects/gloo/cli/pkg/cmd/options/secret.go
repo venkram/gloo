@@ -25,8 +25,8 @@ type AzureSecret struct {
 }
 
 type HeaderSecret struct {
-	Name  string
-	Value string
+	HeaderName string
+	Value      string
 }
 
 type TlsSecret struct {

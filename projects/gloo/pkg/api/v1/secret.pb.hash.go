@@ -279,7 +279,7 @@ func (m *HeaderSecret) Hash(hasher hash.Hash64) (uint64, error) {
 		return 0, err
 	}
 
-	if _, err = hasher.Write([]byte(m.GetName())); err != nil {
+	if _, err = hasher.Write([]byte(m.GetHeaderName())); err != nil {
 		return 0, err
 	}
 

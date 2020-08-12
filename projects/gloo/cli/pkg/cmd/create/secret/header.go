@@ -43,7 +43,7 @@ func headerCmd(opts *options.Options) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringVar(&input.Name, "header-name", "", "header name")
+	flags.StringVar(&input.HeaderName, "header-name", "", "header name")
 	flags.StringVar(&input.Value, "value", "", "header value")
 
 	return cmd
@@ -55,7 +55,7 @@ const (
 )
 
 func HeaderSecretArgsInteractive(input *options.HeaderSecret) error {
-	if err := cliutil.GetStringInput(headerPromptName, &input.Name); err != nil {
+	if err := cliutil.GetStringInput(headerPromptName, &input.HeaderName); err != nil {
 		return err
 	}
 	if err := cliutil.GetStringInput(headerPromptValue, &input.Value); err != nil {
@@ -66,15 +66,15 @@ func HeaderSecretArgsInteractive(input *options.HeaderSecret) error {
 }
 
 func createHeaderSecret(ctx context.Context, meta core.Metadata, input options.HeaderSecret, dryRun bool, outputType printers.OutputType) error {
-	if input.Name == "" {
+	if input.HeaderName == "" {
 		return errors.Errorf("must provide header name")
 	}
 	secret := &gloov1.Secret{
 		Metadata: meta,
 		Kind: &gloov1.Secret_Header{
 			Header: &gloov1.HeaderSecret{
-				Name:  input.Name,
-				Value: input.Value,
+				HeaderName: input.HeaderName,
+				Value:      input.Value,
 			},
 		},
 	}

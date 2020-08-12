@@ -645,8 +645,8 @@ var _ = Describe("Translator", func() {
 				{
 					Kind: &v1.Secret_Header{
 						Header: &v1.HeaderSecret{
-							Name:  "Authorization",
-							Value: "basic dXNlcjpwYXNzd29yZA==",
+							HeaderName: "Authorization",
+							Value:      "basic dXNlcjpwYXNzd29yZA==",
 						},
 					},
 					Metadata: core.Metadata{

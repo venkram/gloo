@@ -75,7 +75,7 @@ func ToEnvoyHeaderValueOption(option *envoycore_sk.HeaderValueOption, secrets *v
 			return nil, errors.Errorf("Secret %v.%v was not a Header secret", typedOption.HeaderSecretRef.GetNamespace(), typedOption.HeaderSecretRef.GetName())
 		}
 
-		key = headerSecrets.Header.GetName()
+		key = headerSecrets.Header.GetHeaderName()
 		value = headerSecrets.Header.GetValue()
 	}
 
