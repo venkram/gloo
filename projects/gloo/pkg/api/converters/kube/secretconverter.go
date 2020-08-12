@@ -21,6 +21,7 @@ const (
 var GlooSecretConverterChain = NewSecretConverterChain(
 	new(TLSSecretConverter),
 	new(AwsSecretConverter),
+	new(HeaderSecretConverter),
 	new(APIKeySecretConverter),
 )
 
@@ -194,4 +195,66 @@ func (t *AwsSecretConverter) ToKubeSecret(_ context.Context, _ *kubesecret.Resou
 		kubeSecret.Data[AwsSessionTokenName] = []byte(sessionToken)
 	}
 	return kubeSecret, nil
+}
+
+type HeaderSecretConverter struct{}
+
+var _ kubesecret.SecretConverter = &HeaderSecretConverter{}
+
+const (
+	HeaderName = "header_name"
+	Value  = "header_value"
+)
+
+func (t *HeaderSecretConverter) FromKubeSecret(_ context.Context, _ *kubesecret.ResourceClient, secret *kubev1.Secret) (resources.Resource, error) {
+	headerName, hasHeaderName := secret.Data[HeaderName]
+	value, hasValue := secret.Data[Value]
+	if hasHeaderName && hasValue {
+		skSecret := &v1.Secret{
+			Metadata: skcore.Metadata{
+				Name:        secret.Name,
+				Namespace:   secret.Namespace,
+				Cluster:     secret.ClusterName,
+				Labels:      secret.Labels,
+				Annotations: secret.Annotations,
+			},
+			Kind: &v1.Secret_Header{
+				Header: &v1.HeaderSecret{
+					HeaderName: string(headerName),
+					Value: string(value),
+				},
+			},
+		}
+
+		return skSecret, nil
+	}
+	// any unmatched secrets will be handled by subsequent converters
+	return nil, nil
+}
+
+func (t *HeaderSecretConverter) ToKubeSecret(_ context.Context, _ *kubesecret.ResourceClient, resource resources.Resource) (*kubev1.Secret, error) {
+	if glooSecret, ok := resource.(*v1.Secret); ok {
+		if headerGlooSecret, ok := glooSecret.Kind.(*v1.Secret_Header); ok {
+			if glooSecret.Metadata.Annotations != nil {
+				if glooSecret.Metadata.Annotations[annotationKey] == annotationValue {
+					objectMeta := kubeutils.ToKubeMeta(glooSecret.Metadata)
+					delete(objectMeta.Annotations, annotationKey)
+					if len(objectMeta.Annotations) == 0 {
+						objectMeta.Annotations = nil
+					}
+					kubeSecret := &kubev1.Secret{
+						ObjectMeta: objectMeta,
+						Type:       kubev1.SecretTypeOpaque,
+						Data: map[string][]byte{
+							HeaderName: []byte(headerGlooSecret.Header.HeaderName),
+							Value: []byte(headerGlooSecret.Header.Value),
+						},
+					}
+					return kubeSecret, nil
+				}
+			}
+		}
+	}
+	// any unmatched secrets will be handled by subsequent converters
+	return nil, nil
 }
