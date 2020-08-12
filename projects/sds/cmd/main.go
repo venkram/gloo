@@ -11,6 +11,7 @@ import (
 	"github.com/solo-io/gloo/projects/sds/pkg/server"
 	"github.com/solo-io/go-utils/contextutils"
 
+	"github.com/avast/retry-go"
 	"go.uber.org/zap"
 	v1 "k8s.io/api/core/v1"
 )
@@ -21,8 +22,7 @@ var (
 
 	// This must match the value of the sds_config target_uri in the envoy instance that it is providing
 	// secrets to.
-	sdsServerAddress   = "127.0.0.1:8234"
-	startupFileRetries = 10 // Number of seconds to wait for certs to exist before crashing
+	sdsServerAddress = "127.0.0.1:8234"
 
 	// The Node ID. Defaults to podname.namespace but can be overriden using env var SDS_CLIENT
 	sdsClient = os.Getenv("GATEWAY_PROXY_POD_NAME") + "." + os.Getenv("GATEWAY_PROXY_POD_NAMESPACE")
@@ -100,23 +100,27 @@ func main() {
 // given filePaths do not exist.
 func checkFilesExist(filePaths []string) error {
 	for _, filePath := range filePaths {
-		if !fileExists(filePath, startupFileRetries) {
+		if !fileExists(filePath) {
 			return fmt.Errorf("could not find file '%v'", filePath)
 		}
 	}
 	return nil
 }
 
-// fileExists checks to see if a file exists every
-// second for `retries` seconds. Returns false after
-// all retries are used if it still can't find it
-func fileExists(filePath string, retries int) bool {
-	if _, err := os.Stat(filePath); err == nil {
-		return true
+// fileExists checks to see if a file exists,
+// retrying for up to 10 seconds.
+func fileExists(filePath string) bool {
+	err := retry.Do(
+		func() error {
+			_, err := os.Stat(filePath)
+			return err
+		},
+		// Retry for up to 10s
+		retry.Delay(400*time.Millisecond),
+		retry.Attempts(25),
+	)
+	if err != nil {
+		return false
 	}
-	if retries > 0 {
-		time.Sleep(time.Second * 1)
-		return fileExists(filePath, retries-1)
-	}
-	return false
+	return true
 }
