@@ -159,8 +159,8 @@ metadata:
 			Expect(err).NotTo(HaveOccurred())
 
 			header := v1.HeaderSecret{
-				HeaderName:  "foo",
-				Value: "bar",
+				HeaderName: "foo",
+				Value:      "bar",
 			}
 			Expect(*secret.GetHeader()).To(Equal(header))
 		}
