@@ -29,9 +29,9 @@ The HTTP Path of health check requests must be an *exact* match to the provided 
 
 ## Configuration
 
-Descriptions of the options available for configuring health checks can be found [here](https://docs.solo.io/gloo/latest/reference/api/github.com/solo-io/gloo/projects/gloo/api/external/envoy/api/v2/core/health_check.proto.sk/). 
+Descriptions of the options available for configuring health checks can be found {{< protobuf name="envoy.api.v2.core.HealthCheck" display="here" >}}.
 
-### Custom Headers
+### Custom Headers for HttpHealthChecks
 
 There are two ways to add custom headers to health check requests, both of which are shown in the example below.
 
@@ -44,9 +44,9 @@ There are two ways to add custom headers to health check requests, both of which
               value: example_value
             append: true
           - headerSecretRef:
-              name: example_name
-              namespace: example_namespace
+              name: example-name
+              namespace: example-namespace
             append: true
 {{< /highlight >}}
 
-A `header` represents an explicitly-specified header where the key is the header name and the value is the header value. In contrast, a `headerSecretRef` points to a header contained in a Kubernetes secret. Secrets for this purpose can be created with glooctl (instructions [here](https://docs.solo.io/gloo/latest/reference/cli/glooctl_create_secret_header/)).
+A `header` represents an explicitly-specified header where the key is the header name and the value is the header value. In contrast, a `headerSecretRef` points to a header contained in a Kubernetes secret. Secrets for this purpose can be [created with glooctl]({{< versioned_link_path fromRoot="/reference/cli/glooctl_create_secret_header" >}}).
