@@ -529,7 +529,7 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
-          - name: ISTIO_CERT_ROTATION_ENABLED
+          - name: CR_ISTIO_ROTATION_ENABLED
             value: "true"
       - name: istio-proxy
         image: docker.io/istio/proxyv2:1.5.1

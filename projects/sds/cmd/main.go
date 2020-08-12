@@ -12,66 +12,53 @@ import (
 	"github.com/solo-io/go-utils/contextutils"
 
 	"github.com/avast/retry-go"
+	"github.com/kelseyhightower/envconfig"
 	"go.uber.org/zap"
 	v1 "k8s.io/api/core/v1"
 )
 
 var (
-	glooMTLSEnabled      = false
-	istioRotationEnabled = false
-
-	// This must match the value of the sds_config target_uri in the envoy instance that it is providing
-	// secrets to.
-	sdsServerAddress = "127.0.0.1:8234"
-
-	// The Node ID. Defaults to podname.namespace but can be overriden using env var SDS_CLIENT
-	sdsClient = os.Getenv("GATEWAY_PROXY_POD_NAME") + "." + os.Getenv("GATEWAY_PROXY_POD_NAMESPACE")
-
-	glooMtlsSecretDir     = "/etc/envoy/ssl/"
-	glooServerCert        = "server_cert"
-	glooValidationContext = "validation_context"
-
-	istioCertDir           = "/etc/istio-certs/"
-	istioServerCert        = "istio_server_cert"
-	istioValidationContext = "istio_validation_context"
+	// The Node ID.
+	sdsClientDefault = os.Getenv("GATEWAY_PROXY_POD_NAME") + "." + os.Getenv("GATEWAY_PROXY_POD_NAMESPACE")
 )
 
-func init() {
-	if enabled := os.Getenv("GLOO_MTLS_CERT_ROTATION_ENABLED"); enabled != "" && enabled != "false" {
-		glooMTLSEnabled = true
-	}
-	if enabled := os.Getenv("ISTIO_CERT_ROTATION_ENABLED"); enabled != "" && enabled != "false" {
-		istioRotationEnabled = true
-	}
-	if sdsClientOverride := os.Getenv("SDS_CLIENT"); sdsClientOverride != "" {
-		sdsClient = sdsClientOverride
-	}
-	// At least one must be enabled, otherwise we have nothing to do.
-	if !glooMTLSEnabled && !istioRotationEnabled {
-		panic("at least one of Istio Cert rotation or Gloo Cert rotation must be enabled, using env vars ISTIO_CERT_ROTATION_ENABLED or GLOO_MTLS_CERT_ROTATION_ENABLED")
-	}
+type Config struct {
+	SdsServerAddress string `split_words:"true" default:"127.0.0.1:8234"` //sds_config target_uri in the envoy instance that it provides secrets to
+	SdsClient        string `split_words:"true"`
+
+	GlooRotationEnabled   bool   `split_words:"true"`
+	GlooMtlsSecretDir     string `split_words:"true" default:"/etc/envoy/ssl/"`
+	GlooServerCert        string `split_words:"true" default:"server_cert"`
+	GlooValidationContext string `split_words:"true" default:"validation_context"`
+
+	IstioRotationEnabled   bool   `split_words:"true"`
+	IstioCertDir           string `split_words:"true" default:"/etc/istio-certs/"`
+	IstioServerCert        string `split_words:"true" default:"istio_server_cert"`
+	IstioValidationContext string `split_words:"true" default:"istio_validation_context"`
 }
 
 func main() {
+	var c = setup()
+
 	secrets := []server.Secret{}
-	if istioRotationEnabled {
+	if c.IstioRotationEnabled {
 		istioCertsSecret := server.Secret{
-			ServerCert:        istioServerCert,
-			ValidationContext: istioValidationContext,
-			SslCaFile:         istioCertDir + "root-cert.pem",
-			SslCertFile:       istioCertDir + "cert-chain.pem",
-			SslKeyFile:        istioCertDir + "key.pem",
+			ServerCert:        c.IstioServerCert,
+			ValidationContext: c.IstioValidationContext,
+			SslCaFile:         c.IstioCertDir + "root-cert.pem",
+			SslCertFile:       c.IstioCertDir + "cert-chain.pem",
+			SslKeyFile:        c.IstioCertDir + "key.pem",
 		}
 		secrets = append(secrets, istioCertsSecret)
 	}
 
-	if glooMTLSEnabled {
+	if c.GlooRotationEnabled {
 		glooMtlsSecret := server.Secret{
-			ServerCert:        glooServerCert,
-			ValidationContext: glooValidationContext,
-			SslCaFile:         glooMtlsSecretDir + v1.ServiceAccountRootCAKey,
-			SslCertFile:       glooMtlsSecretDir + v1.TLSCertKey,
-			SslKeyFile:        glooMtlsSecretDir + v1.TLSPrivateKeyKey,
+			ServerCert:        c.GlooServerCert,
+			ValidationContext: c.GlooValidationContext,
+			SslCaFile:         c.GlooMtlsSecretDir + v1.ServiceAccountRootCAKey,
+			SslCertFile:       c.GlooMtlsSecretDir + v1.TLSCertKey,
+			SslKeyFile:        c.GlooMtlsSecretDir + v1.TLSPrivateKeyKey,
 		}
 		secrets = append(secrets, glooMtlsSecret)
 	}
@@ -87,13 +74,32 @@ func main() {
 	}
 	contextutils.LoggerFrom(ctx).Infow(
 		"starting up",
-		zap.Bool("glooCertRotationEnabled", glooMTLSEnabled),
-		zap.Bool("istioCertRotationEnabled", istioRotationEnabled),
+		zap.Bool("glooCertRotationEnabled", c.GlooRotationEnabled),
+		zap.Bool("istioCertRotationEnabled", c.IstioRotationEnabled),
 	)
 
-	if err := run.Run(ctx, secrets, sdsClient, sdsServerAddress); err != nil {
+	if err := run.Run(ctx, secrets, c.SdsClient, c.SdsServerAddress); err != nil {
 		contextutils.LoggerFrom(ctx).Fatal(err)
 	}
+}
+
+func setup() Config {
+	var c Config
+	err := envconfig.Process("cr", &c)
+	if err != nil {
+		panic("error, could not process sds config")
+	}
+
+	// Use podname.podnamepsace if sdsClient not explicitly set
+	if c.SdsClient == "" {
+		c.SdsClient = sdsClientDefault
+	}
+
+	// At least one must be enabled, otherwise we have nothing to do.
+	if !c.GlooRotationEnabled && !c.IstioRotationEnabled {
+		panic("at least one of Istio Cert rotation or Gloo Cert rotation must be enabled, using env vars CR_GLOO_ROTATION_ENABLED or CR_ISTIO_ROTATION_ENABLED")
+	}
+	return c
 }
 
 // checkFilesExist returns an err if any of the
